@@ -38,20 +38,13 @@ import {
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 export function ChatPage() {
+  const navigate = useNavigate();
   // 1. Simpan pesan
-  const [sessions, setSessions] = useState<ChatSession[]>(() => {
-    const saved = localStorage.getItem("skymind_chat_sessions");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.log("Gagal parse session: ", e);
-      }
-    }
-    return [];
-  });
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(true);
 
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
 
@@ -63,9 +56,48 @@ export function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Fungsi ambil chat history dari be
+  const fetchChatHistory = async () => {
+    const token = localStorage.getItem("access_token");
+
+    const apiUrl = import.meta.env.VITE_BE_URL;
+
+    // validasi token jika belum login
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setLoadingHistory(true);
+
+    try {
+      // request chat history ke be
+      const response = await axios.get(`${apiUrl}/session`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log("Riwayat sesi dari be: ", response.data);
+
+      const sessionData = response.data?.data || response.data || [];
+      setSessions(sessionData);
+    } catch (error: any) {
+      console.log("Gagal mengambil riwayat chat: ", error);
+
+      if (error.response?.status === 401) {
+        localStorage.removeItem("access_token");
+        navigate("/login");
+      }
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  // panggil fetch history
   useEffect(() => {
-    localStorage.setItem("skymind_chat_sessions", JSON.stringify(sessions));
-  }, [sessions]);
+    fetchChatHistory();
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -223,6 +255,7 @@ Fitur yang didukung:
         activeChatId={activeChatId}
         onSelectChat={handleSelectChat}
         onDeleteChat={handleDeleteChat}
+        loadingHistory={loadingHistory}
       />
 
       {/* Main Chat */}
@@ -412,6 +445,7 @@ interface ChatSideBarProps {
   activeChatId: string | null;
   onSelectChat: (id: string) => void;
   onDeleteChat: (id: string, e: React.MouseEvent) => void;
+  loadingHistory: boolean;
 }
 
 function ChatSideBar({
@@ -422,6 +456,7 @@ function ChatSideBar({
   activeChatId,
   onSelectChat,
   onDeleteChat,
+  loadingHistory,
 }: ChatSideBarProps) {
   const navigate = useNavigate();
   return (
@@ -487,6 +522,7 @@ function ChatSideBar({
           activeChatId={activeChatId}
           onSelectChat={onSelectChat}
           onDeleteChat={onDeleteChat}
+          loadingHistory={loadingHistory}
           // chats={[
           //   "Project planning ideas",
           //   "Summarize this article",
@@ -582,6 +618,7 @@ type HistorySectionProps = {
   activeChatId: string | null;
   onSelectChat: (id: string) => void;
   onDeleteChat: (id: string, e: React.MouseEvent) => void;
+  loadingHistory?: boolean;
 };
 
 function HistorySection({
@@ -590,7 +627,26 @@ function HistorySection({
   activeChatId,
   onSelectChat,
   onDeleteChat,
+  loadingHistory,
 }: HistorySectionProps) {
+  if (loadingHistory) {
+    return (
+      <div className="space-y-2 px-1">
+        <p className="mb-2 px-2 text-xs font-medium tracking-wide text-slate-400">
+          {title}
+        </p>
+        <div className="space-y-1.5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className="h-8 w-full-animate-pulse rounded-lg bg-slate-200/70"
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   if (sessions.length === 0) {
     return null;
   }
