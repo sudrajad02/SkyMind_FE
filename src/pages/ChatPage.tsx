@@ -38,34 +38,84 @@ import {
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function ChatPage() {
+  const navigate = useNavigate();
   // 1. Simpan pesan
-  const [sessions, setSessions] = useState<ChatSession[]>(() => {
-    const saved = localStorage.getItem("skymind_chat_sessions");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.log("Gagal parse session: ", e);
-      }
-    }
-    return [];
-  });
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(true);
 
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
 
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
   const [activeNav, setActiveNav] = useState<string>("chat");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [isThinking, setIsThinking] = useState<boolean>(false);
   const [inputPrompt, setInputPrompt] = useState<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  const user = localStorage.getItem("user");
+  const userJson = user ? JSON.parse(user) : null;
+
+  // Fungsi ambil chat history dari be
+  const fetchChatHistory = async () => {
+    const token = localStorage.getItem("access_token");
+
+    const apiUrl = import.meta.env.VITE_BE_URL;
+
+    // validasi token jika belum login
+    if (!token) {
+      localStorage.clear();
+      navigate("/login");
+      return;
+    }
+
+    setLoadingHistory(true);
+
+    try {
+      // request chat history ke be
+      const response = await axios.get(`${apiUrl}/session`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log("Riwayat sesi dari be: ", response.data);
+
+      const sessionData = response.data?.data || response.data || [];
+      setSessions(sessionData);
+    } catch (error: any) {
+      console.log("Gagal mengambil riwayat chat: ", error);
+
+      if (error.response?.status === 401) {
+        localStorage.clear();
+        navigate("/login");
+      }
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  // panggil fetch history
   useEffect(() => {
-    localStorage.setItem("skymind_chat_sessions", JSON.stringify(sessions));
-  }, [sessions]);
+    fetchChatHistory();
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -126,7 +176,7 @@ Fitur yang didukung:
       const botId = Date.now() + 1;
       const botMessage: Message = {
         id: botId,
-        role: "assistant",
+        role: "ai",
         content: "",
       };
 
@@ -152,7 +202,7 @@ Fitur yang didukung:
 
       const finalBotMessages: Message = {
         id: botId,
-        role: "assistant",
+        role: "ai",
         content: accumulatedText,
       };
 
@@ -192,23 +242,89 @@ Fitur yang didukung:
     }
   };
 
-  const handleSelectChat = (id: string) => {
-    const selected = sessions.find((s) => s.id === id);
-    if (selected) {
-      setActiveChatId(selected.id);
-      setMessages(selected.messages);
-      setIsTyping(false);
-      setIsThinking(false);
-      setInputPrompt("");
+  const handleSelectChat = async (id: string) => {
+    if (activeChatId == id) return;
+
+    setActiveChatId(id);
+    setLoadingMessages(true);
+    setIsTyping(false);
+    setIsThinking(false);
+    setInputPrompt("");
+
+    const token = localStorage.getItem("access_token");
+    const apiUrl = import.meta.env.VITE_BE_URL;
+    if (!token) {
+      localStorage.clear();
+      navigate("/login");
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${apiUrl}/chat/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log(`Riwayat pesan sesi ${id}:`, response.data);
+      const chatMessages = response.data?.data || [];
+      setMessages(chatMessages);
       inputRef.current?.focus();
+    } catch (error: any) {
+      console.error("Gagal memuat pesan obrolan:", error);
+      if (error.response?.status === 401) {
+        localStorage.clear();
+        navigate("/login");
+        return;
+      }
+      setMessages([]);
+    } finally {
+      setLoadingMessages(false);
     }
   };
 
   const handleDeleteChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSessions((prev) => prev.filter((s) => s.id !== id));
-    if (activeChatId === id) {
-      handleNewChat();
+    setSessionToDelete(id);
+  };
+
+  const confirmDeleteChat = async () => {
+    if (!sessionToDelete) return;
+
+    const token = localStorage.getItem("access_token");
+    const apiUrl = import.meta.env.VITE_BE_URL;
+
+    if (!token) {
+      localStorage.clear();
+      navigate("/login");
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      await axios.delete(`${apiUrl}/session/${sessionToDelete}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log(`Session ${sessionToDelete} berhasil di hapus`);
+
+      setSessions((prev) => prev.filter((s) => s.id !== sessionToDelete));
+
+      setSessionToDelete(null);
+    } catch (error: any) {
+      console.log("Gagal menghapus session: ", error);
+
+      if (error.response?.status === 401) {
+        localStorage.clear();
+        navigate("/login");
+      }
+
+      alert("Gagal menghapus sesi. Silakan coba lagi.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -223,6 +339,8 @@ Fitur yang didukung:
         activeChatId={activeChatId}
         onSelectChat={handleSelectChat}
         onDeleteChat={handleDeleteChat}
+        loadingHistory={loadingHistory}
+        user={userJson}
       />
 
       {/* Main Chat */}
@@ -274,8 +392,16 @@ Fitur yang didukung:
           <div
             className={`mx-auto flex w-full max-w-4xl flex-1 flex-col ${messages.length === 0 ? "justify-center" : "justify-between"}  px-5 py-2`}
           >
-            {/* Welcome */}
-            {messages.length === 0 ? (
+            {loadingMessages ? (
+              // Loading screen
+              <div className="flex flex-1 items-center justify-center">
+                <div className="flex items-center gap-2.5 text-sm text-slate-400">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                  <span>Memuat percakapan...</span>
+                </div>
+              </div>
+            ) : messages.length === 0 ? (
+              // Welcome screen
               <div className="-mt-30 mb-8 text-center">
                 <h1 className="text 2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
                   How can I help you today?
@@ -290,6 +416,7 @@ Fitur yang didukung:
                 />
               </div>
             ) : (
+              // Chat Screen
               <div className="flex-1 space-y-4">
                 {messages.map((msg) => {
                   return (
@@ -301,13 +428,13 @@ Fitur yang didukung:
                       <div
                         className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-6 ${msg.role === "user" ? "bg-blue-200 text-slate-600" : "bg-slate-100 text-slate-600"}`}
                       >
-                        {msg.role === "assistant" ? (
+                        {msg.role === "ai" ? (
                           <MarkdownRenderer content={msg.content} />
                         ) : (
                           <p className="whitespace-pre-wrap">{msg.content}</p>
                         )}
                       </div>
-                      {msg.role === "assistant" && !isTyping && (
+                      {msg.role === "ai" && !isTyping && (
                         <MessageActions
                           content={msg.content}
                           onRegenerate={handleRegenerate}
@@ -343,6 +470,37 @@ Fitur yang didukung:
           </div>
         </div>
       </main>
+
+      {/* Alert Konfirmasi Hapus */}
+      <AlertDialog
+        open={Boolean(sessionToDelete)}
+        onOpenChange={(open) => !open && setSessionToDelete(null)}
+      >
+        <AlertDialogContent className="!max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl font-semibold">
+              Hapus percakapan?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Percakapan ini beserta seluruh pesan di dalamnya akan dihapus
+              secara permanen. Tindakan ini tidak dapat dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="bg-white border-none">
+            <AlertDialogCancel disabled={isDeleting}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeleteChat();
+              }}
+              disabled={isDeleting}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {isDeleting ? "Menghapus..." : "Hapus"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -412,6 +570,8 @@ interface ChatSideBarProps {
   activeChatId: string | null;
   onSelectChat: (id: string) => void;
   onDeleteChat: (id: string, e: React.MouseEvent) => void;
+  loadingHistory: boolean;
+  user: any;
 }
 
 function ChatSideBar({
@@ -422,6 +582,8 @@ function ChatSideBar({
   activeChatId,
   onSelectChat,
   onDeleteChat,
+  loadingHistory,
+  user,
 }: ChatSideBarProps) {
   const navigate = useNavigate();
   return (
@@ -487,6 +649,7 @@ function ChatSideBar({
           activeChatId={activeChatId}
           onSelectChat={onSelectChat}
           onDeleteChat={onDeleteChat}
+          loadingHistory={loadingHistory}
           // chats={[
           //   "Project planning ideas",
           //   "Summarize this article",
@@ -511,14 +674,19 @@ function ChatSideBar({
 
       {/* User */}
       <div className="border-t border-slate-200 p-3">
-        <div className="flex w-full items-center justify-between rounded-lg p-1.5 hover:bg-slate-700/10">
+        <div className="flex w-full items-center justify-between gap-2 rounded-lg p-1.5 hover:bg-slate-700/10">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg p-2 text-left focus:outline-none">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
-                AC
+            <DropdownMenuTrigger className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-left focus:outline-none">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
+                {user?.full_name.split(" ").length == 1
+                  ? user?.full_name.split(" ")[0][0]
+                  : user?.full_name.split(" ")[0][0] +
+                    user?.full_name.split(" ")[1][0]}
               </div>
               <div className="min-w-0 flex-1 text-left">
-                <p className="truncate text-sm font-medium">Alex Carter</p>
+                <p className="truncate text-sm font-medium">
+                  {user?.full_name}
+                </p>
                 <p className="truncate text-xs text-slate-400">Free Plan</p>
               </div>
             </DropdownMenuTrigger>
@@ -532,11 +700,11 @@ function ChatSideBar({
               <DropdownMenuGroup>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="mt-1 text-sm font-medium leading-none">
-                      Alex Carter
+                    <p className="truncate mt-1 text-sm font-medium leading-none">
+                      {user?.full_name}
                     </p>
-                    <p className="mt-1 text-xs leading-none text-slate-500">
-                      alex@example.com
+                    <p className="truncate mt-1 text-xs leading-none text-slate-500">
+                      {user?.email}
                     </p>
                   </div>
                 </DropdownMenuLabel>
@@ -554,7 +722,10 @@ function ChatSideBar({
                   <span>Settings</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => navigate("/login-v2")}
+                  onClick={() => {
+                    localStorage.clear();
+                    navigate("/login-v2");
+                  }}
                   className="mt-2 mb-2 cursor-pointer gap-3 text-red-600 focus:text-red-600 focus:bg-red-50"
                 >
                   <LogOut className="h-4 w-4" />
@@ -582,6 +753,7 @@ type HistorySectionProps = {
   activeChatId: string | null;
   onSelectChat: (id: string) => void;
   onDeleteChat: (id: string, e: React.MouseEvent) => void;
+  loadingHistory?: boolean;
 };
 
 function HistorySection({
@@ -590,7 +762,26 @@ function HistorySection({
   activeChatId,
   onSelectChat,
   onDeleteChat,
+  loadingHistory,
 }: HistorySectionProps) {
+  if (loadingHistory) {
+    return (
+      <div className="space-y-2 px-1">
+        <p className="mb-2 px-2 text-xs font-medium tracking-wide text-slate-400">
+          {title}
+        </p>
+        <div className="space-y-1.5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className="h-8 w-full-animate-pulse rounded-lg bg-slate-200/70"
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   if (sessions.length === 0) {
     return null;
   }
@@ -749,7 +940,7 @@ function SuggestionList({ onSelect }: SuggestionListProps) {
   );
 }
 
-type MessageRole = "user" | "assistant";
+type MessageRole = "user" | "ai";
 
 interface MessageSection {
   title: string; // Contoh: "1. Planning"
@@ -758,7 +949,7 @@ interface MessageSection {
 
 interface Message {
   id: number; // ID unik pesan (biasanya timestamp angka)
-  role: MessageRole; // Siapa pengirimnya ("user" atau "assistant")
+  role: MessageRole; // Siapa pengirimnya ("user" atau "ai")
   content: string; // Teks isi pesan utama
   list?: MessageSection[]; // (Opsional) Jika balasan AI memiliki daftar poin terstruktur
   footer?: string; // (Opsional) Kalimat penutup balasan AI

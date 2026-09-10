@@ -6,6 +6,7 @@ import googleIcon from "@/assets/icon_google.svg";
 import windowsIcon from "@/assets/icon_windows.svg";
 import appleIcon from "@/assets/icon_apple.svg";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 export function LoginForm() {
   const navigate = useNavigate();
@@ -42,22 +43,36 @@ export function LoginForm() {
     setLoading(true);
 
     try {
-      // Simulasi jeda request ke server selama 1 detik (1000ms)
-      // Nantinya bisa diganti dengan fetch/axios ke backend autentikasi kamu:
-      // const res = await fetch("/api/auth/login", { method: "POST", body: JSON.stringify(form) });
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Ambil URL dari environment variable (dengan fallback default jika kosong)
+      const apiUrl = import.meta.env.VITE_BE_URL;
 
-      console.log("Data Login:", {
+      // Send request POST menggunakan AXIOS
+      const response = await axios.post(`${apiUrl}/auth/login`, {
         email: form.email,
         password: form.password,
-        rememberMe,
       });
 
+      // Save access token ke local storage
+      if (response.data?.data?.access_token) {
+        localStorage.setItem("access_token", response.data.data.access_token);
+        if (response.data?.data?.user) {
+          localStorage.setItem("user", JSON.stringify(response.data.data.user));
+        }
+      }
+
       // Berpindah ke halaman chat setelah login berhasil
-      navigate("/chat-v2");
+      navigate("/chat");
     } catch (error) {
       console.error("Login gagal:", error);
-      setError("Email atau password yang kamu masukkan salah.");
+
+      // Tangkap error message
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        "Email atau password yang kamu masukkan salah.";
+
+      setError(errorMessage);
     } finally {
       // Mematikan status loading setelah proses selesai (baik sukses maupun gagal)
       setLoading(false);
@@ -89,7 +104,7 @@ export function LoginForm() {
 
       {/* Form */}
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-md text-red-900 flex items-center justify-center">
           {error}
         </div>
       )}
