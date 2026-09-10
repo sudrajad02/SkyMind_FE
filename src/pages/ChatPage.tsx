@@ -355,7 +355,7 @@ function MessageActions({
   onRegenerate: () => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const [liked, setLiked] = useState(null);
+  const [liked, setLiked] = useState<boolean | null>(null);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(content);
