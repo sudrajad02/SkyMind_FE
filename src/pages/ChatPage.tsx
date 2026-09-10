@@ -176,7 +176,7 @@ Fitur yang didukung:
       const botId = Date.now() + 1;
       const botMessage: Message = {
         id: botId,
-        role: "assistant",
+        role: "ai",
         content: "",
       };
 
@@ -202,7 +202,7 @@ Fitur yang didukung:
 
       const finalBotMessages: Message = {
         id: botId,
-        role: "assistant",
+        role: "ai",
         content: accumulatedText,
       };
 
@@ -428,13 +428,13 @@ Fitur yang didukung:
                       <div
                         className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-6 ${msg.role === "user" ? "bg-blue-200 text-slate-600" : "bg-slate-100 text-slate-600"}`}
                       >
-                        {msg.role === "assistant" ? (
+                        {msg.role === "ai" ? (
                           <MarkdownRenderer content={msg.content} />
                         ) : (
                           <p className="whitespace-pre-wrap">{msg.content}</p>
                         )}
                       </div>
-                      {msg.role === "assistant" && !isTyping && (
+                      {msg.role === "ai" && !isTyping && (
                         <MessageActions
                           content={msg.content}
                           onRegenerate={handleRegenerate}
@@ -940,7 +940,7 @@ function SuggestionList({ onSelect }: SuggestionListProps) {
   );
 }
 
-type MessageRole = "user" | "assistant";
+type MessageRole = "user" | "ai";
 
 interface MessageSection {
   title: string; // Contoh: "1. Planning"
@@ -949,7 +949,7 @@ interface MessageSection {
 
 interface Message {
   id: number; // ID unik pesan (biasanya timestamp angka)
-  role: MessageRole; // Siapa pengirimnya ("user" atau "assistant")
+  role: MessageRole; // Siapa pengirimnya ("user" atau "ai")
   content: string; // Teks isi pesan utama
   list?: MessageSection[]; // (Opsional) Jika balasan AI memiliki daftar poin terstruktur
   footer?: string; // (Opsional) Kalimat penutup balasan AI
