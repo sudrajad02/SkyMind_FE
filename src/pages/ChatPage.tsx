@@ -199,7 +199,7 @@ export function ChatPage() {
 
         await new Promise((resolve) => setTimeout(resolve, 60));
       }
-    } catch (error) {
+    } catch (error: any) {
       // Handle error jika API gagal
       console.error("Error mengirim pesan:", error);
 
