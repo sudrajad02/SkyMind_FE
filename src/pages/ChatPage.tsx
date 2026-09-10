@@ -123,6 +123,15 @@ export function ChatPage() {
 
   // 2. mengirim pesan & menerima balasan
   const handleSendMessage = async (userText: string) => {
+    if (!userText.trim()) return;
+    const token = localStorage.getItem("access_token");
+    const apiUrl = import.meta.env.VITE_BE_URL;
+    if (!token) {
+      localStorage.clear();
+      navigate("/login");
+      return;
+    }
+
     // a. Buat pesan user
     const userMessage: Message = {
       id: Date.now(),
@@ -136,43 +145,34 @@ export function ChatPage() {
     setIsTyping(true);
     setIsThinking(true);
 
-    let currentSessionId = activeChatId;
-    if (!currentSessionId) {
-      currentSessionId = Date.now().toString();
-      setActiveChatId(currentSessionId);
-
-      const newSession: ChatSession = {
-        id: currentSessionId,
-        title: userText,
-        messages: updateMessages,
-        createdAt: new Date(),
-      };
-
-      setSessions((prev) => [...prev, newSession]);
-    } else {
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === currentSessionId ? { ...s, messages: updateMessages } : s,
-        ),
-      );
-    }
-
     try {
-      // Simulasi jeda respon
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // post api chat ke be
+      const response = await axios.post(
+        `${apiUrl}/chat`,
+        {
+          session_id: activeChatId,
+          content: userText,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
 
-      const fullText = `Tentu! Berikut contoh kode JavaScript sederhana:
-\`\`\`javascript
-function hitungLuas(panjang, lebar) {
-  return panjang * lebar;
-}
-console.log("Luas:", hitungLuas(5, 10));
-\`\`\`
-Fitur yang didukung:
-- **Teks tebal** dan *miring*
-- Kode inline seperti \`const x = 10\`
-- Tombol **Copy Code** di pojok kanan atas kode program!`;
+      console.log("Respon chat backend:", response.data);
 
+      const resData = response.data?.data || response.data;
+      const aiReply = resData?.content || "Maaf, tidak ada respon dari server.";
+      const returnedSessionId = resData?.session_id;
+
+      // handle session pertama atau lanjut
+      if (!activeChatId && returnedSessionId) {
+        setActiveChatId(String(returnedSessionId));
+        fetchChatHistory(); // untuk update sidebar agar title muncul update
+      }
+
+      // tampilkan balasan ai
       const botId = Date.now() + 1;
       const botMessage: Message = {
         id: botId,
@@ -180,12 +180,12 @@ Fitur yang didukung:
         content: "",
       };
 
-      // e. simpan balasan ai
-      const withBotMessages = [...updateMessages, botMessage];
-      setMessages(withBotMessages);
+      // simpan balasan ai di state
+      setMessages([...updateMessages, botMessage]);
       setIsThinking(false);
 
-      const words = fullText.split(" ");
+      // efek typing
+      const words = aiReply.split(" ");
       let accumulatedText = "";
 
       for (let i = 0; i < words.length; i++) {
@@ -199,23 +199,24 @@ Fitur yang didukung:
 
         await new Promise((resolve) => setTimeout(resolve, 60));
       }
-
-      const finalBotMessages: Message = {
-        id: botId,
-        role: "ai",
-        content: accumulatedText,
-      };
-
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === currentSessionId
-            ? { ...s, messages: [...updateMessages, finalBotMessages] }
-            : s,
-        ),
-      );
-    } catch (error) {
+    } catch (error: any) {
       // Handle error jika API gagal
-      console.error("Error fetching response:", error);
+      console.error("Error mengirim pesan:", error);
+
+      if (error.response?.status === 401) {
+        localStorage.clear();
+        navigate("/login");
+        return;
+      }
+      const errorMessage: Message = {
+        id: Date.now() + 1,
+        role: "ai",
+        content:
+          error.response?.data?.detail ||
+          error.response?.data?.error ||
+          "Maaf, gagal mendapatkan jawaban dari server.",
+      };
+      setMessages([...updateMessages, errorMessage]);
     } finally {
       // f. Matikan status loading
       setIsTyping(false);

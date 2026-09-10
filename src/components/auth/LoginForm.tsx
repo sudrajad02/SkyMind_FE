@@ -62,7 +62,7 @@ export function LoginForm() {
 
       // Berpindah ke halaman chat setelah login berhasil
       navigate("/chat");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login gagal:", error);
 
       // Tangkap error message
