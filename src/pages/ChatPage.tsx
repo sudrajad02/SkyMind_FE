@@ -64,6 +64,7 @@ export function ChatPage() {
 
     // validasi token jika belum login
     if (!token) {
+      localStorage.clear();
       navigate("/login");
       return;
     }
@@ -86,7 +87,7 @@ export function ChatPage() {
       console.log("Gagal mengambil riwayat chat: ", error);
 
       if (error.response?.status === 401) {
-        localStorage.removeItem("access_token");
+        localStorage.clear();
         navigate("/login");
       }
     } finally {
