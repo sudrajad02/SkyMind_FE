@@ -39,6 +39,16 @@ import {
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function ChatPage() {
   const navigate = useNavigate();
@@ -47,6 +57,9 @@ export function ChatPage() {
   const [loadingHistory, setLoadingHistory] = useState<boolean>(true);
 
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const [activeNav, setActiveNav] = useState<string>("chat");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -239,9 +252,46 @@ Fitur yang didukung:
 
   const handleDeleteChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSessions((prev) => prev.filter((s) => s.id !== id));
-    if (activeChatId === id) {
-      handleNewChat();
+    setSessionToDelete(id);
+  };
+
+  const confirmDeleteChat = async () => {
+    if (!sessionToDelete) return;
+
+    const token = localStorage.getItem("access_token");
+    const apiUrl = import.meta.env.VITE_BE_URL;
+
+    if (!token) {
+      localStorage.clear();
+      navigate("/login");
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      await axios.delete(`${apiUrl}/session/${sessionToDelete}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log(`Session ${sessionToDelete} berhasil di hapus`);
+
+      setSessions((prev) => prev.filter((s) => s.id !== sessionToDelete));
+
+      setSessionToDelete(null);
+    } catch (error: any) {
+      console.log("Gagal menghapus session: ", error);
+
+      if (error.response?.status === 401) {
+        localStorage.clear();
+        navigate("/login");
+      }
+
+      alert("Gagal menghapus sesi. Silakan coba lagi.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -377,6 +427,35 @@ Fitur yang didukung:
           </div>
         </div>
       </main>
+
+      {/* Alert Konfirmasi Hapus */}
+      <AlertDialog
+        open={Boolean(sessionToDelete)}
+        onOpenChange={(open) => !open && setSessionToDelete(null)}
+      >
+        <AlertDialogContent className="!max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl font-semibold">Hapus percakapan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Percakapan ini beserta seluruh pesan di dalamnya akan dihapus
+              secara permanen. Tindakan ini tidak dapat dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="bg-white border-none">
+            <AlertDialogCancel disabled={isDeleting}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeleteChat();
+              }}
+              disabled={isDeleting}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {isDeleting ? "Menghapus..." : "Hapus"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
