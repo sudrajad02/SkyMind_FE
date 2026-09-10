@@ -69,6 +69,9 @@ export function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  const user = localStorage.getItem("user");
+  const userJson = user ? JSON.parse(user) : null;
+
   // Fungsi ambil chat history dari be
   const fetchChatHistory = async () => {
     const token = localStorage.getItem("access_token");
@@ -307,6 +310,7 @@ Fitur yang didukung:
         onSelectChat={handleSelectChat}
         onDeleteChat={handleDeleteChat}
         loadingHistory={loadingHistory}
+        user={userJson}
       />
 
       {/* Main Chat */}
@@ -435,7 +439,9 @@ Fitur yang didukung:
       >
         <AlertDialogContent className="!max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-2xl font-semibold">Hapus percakapan?</AlertDialogTitle>
+            <AlertDialogTitle className="text-2xl font-semibold">
+              Hapus percakapan?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               Percakapan ini beserta seluruh pesan di dalamnya akan dihapus
               secara permanen. Tindakan ini tidak dapat dibatalkan.
@@ -526,6 +532,7 @@ interface ChatSideBarProps {
   onSelectChat: (id: string) => void;
   onDeleteChat: (id: string, e: React.MouseEvent) => void;
   loadingHistory: boolean;
+  user: any;
 }
 
 function ChatSideBar({
@@ -537,6 +544,7 @@ function ChatSideBar({
   onSelectChat,
   onDeleteChat,
   loadingHistory,
+  user,
 }: ChatSideBarProps) {
   const navigate = useNavigate();
   return (
@@ -627,14 +635,19 @@ function ChatSideBar({
 
       {/* User */}
       <div className="border-t border-slate-200 p-3">
-        <div className="flex w-full items-center justify-between rounded-lg p-1.5 hover:bg-slate-700/10">
+        <div className="flex w-full items-center justify-between gap-2 rounded-lg p-1.5 hover:bg-slate-700/10">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg p-2 text-left focus:outline-none">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
-                AC
+            <DropdownMenuTrigger className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-left focus:outline-none">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
+                {user?.full_name.split(" ").length == 1
+                  ? user?.full_name.split(" ")[0][0]
+                  : user?.full_name.split(" ")[0][0] +
+                    user?.full_name.split(" ")[1][0]}
               </div>
               <div className="min-w-0 flex-1 text-left">
-                <p className="truncate text-sm font-medium">Alex Carter</p>
+                <p className="truncate text-sm font-medium">
+                  {user?.full_name}
+                </p>
                 <p className="truncate text-xs text-slate-400">Free Plan</p>
               </div>
             </DropdownMenuTrigger>
@@ -648,11 +661,11 @@ function ChatSideBar({
               <DropdownMenuGroup>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="mt-1 text-sm font-medium leading-none">
-                      Alex Carter
+                    <p className="truncate mt-1 text-sm font-medium leading-none">
+                      {user?.full_name}
                     </p>
-                    <p className="mt-1 text-xs leading-none text-slate-500">
-                      alex@example.com
+                    <p className="truncate mt-1 text-xs leading-none text-slate-500">
+                      {user?.email}
                     </p>
                   </div>
                 </DropdownMenuLabel>
@@ -670,7 +683,10 @@ function ChatSideBar({
                   <span>Settings</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => navigate("/login-v2")}
+                  onClick={() => {
+                    localStorage.clear();
+                    navigate("/login-v2");
+                  }}
                   className="mt-2 mb-2 cursor-pointer gap-3 text-red-600 focus:text-red-600 focus:bg-red-50"
                 >
                   <LogOut className="h-4 w-4" />
