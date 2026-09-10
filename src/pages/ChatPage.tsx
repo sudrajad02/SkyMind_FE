@@ -63,6 +63,7 @@ export function ChatPage() {
 
   const [activeNav, setActiveNav] = useState<string>("chat");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [isThinking, setIsThinking] = useState<boolean>(false);
   const [inputPrompt, setInputPrompt] = useState<string>("");
@@ -241,15 +242,44 @@ Fitur yang didukung:
     }
   };
 
-  const handleSelectChat = (id: string) => {
-    const selected = sessions.find((s) => s.id === id);
-    if (selected) {
-      setActiveChatId(selected.id);
-      setMessages(selected.messages);
-      setIsTyping(false);
-      setIsThinking(false);
-      setInputPrompt("");
+  const handleSelectChat = async (id: string) => {
+    if (activeChatId == id) return;
+
+    setActiveChatId(id);
+    setLoadingMessages(true);
+    setIsTyping(false);
+    setIsThinking(false);
+    setInputPrompt("");
+
+    const token = localStorage.getItem("access_token");
+    const apiUrl = import.meta.env.VITE_BE_URL;
+    if (!token) {
+      localStorage.clear();
+      navigate("/login");
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${apiUrl}/chat/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log(`Riwayat pesan sesi ${id}:`, response.data);
+      const chatMessages = response.data?.data || [];
+      setMessages(chatMessages);
       inputRef.current?.focus();
+    } catch (error: any) {
+      console.error("Gagal memuat pesan obrolan:", error);
+      if (error.response?.status === 401) {
+        localStorage.clear();
+        navigate("/login");
+        return;
+      }
+      setMessages([]);
+    } finally {
+      setLoadingMessages(false);
     }
   };
 
@@ -362,8 +392,16 @@ Fitur yang didukung:
           <div
             className={`mx-auto flex w-full max-w-4xl flex-1 flex-col ${messages.length === 0 ? "justify-center" : "justify-between"}  px-5 py-2`}
           >
-            {/* Welcome */}
-            {messages.length === 0 ? (
+            {loadingMessages ? (
+              // Loading screen
+              <div className="flex flex-1 items-center justify-center">
+                <div className="flex items-center gap-2.5 text-sm text-slate-400">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                  <span>Memuat percakapan...</span>
+                </div>
+              </div>
+            ) : messages.length === 0 ? (
+              // Welcome screen
               <div className="-mt-30 mb-8 text-center">
                 <h1 className="text 2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
                   How can I help you today?
@@ -378,6 +416,7 @@ Fitur yang didukung:
                 />
               </div>
             ) : (
+              // Chat Screen
               <div className="flex-1 space-y-4">
                 {messages.map((msg) => {
                   return (
