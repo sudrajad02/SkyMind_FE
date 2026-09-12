@@ -9,7 +9,7 @@ export function NotFoundPage() {
   const targetHome = token ? "/chat" : "/login";
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-[f4f7fa] px-6 text-center">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#f4f7fa] px-6 text-center">
       <div className="mx-auto max-w-md">
         <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-white shadow-sm ring-1 ring-slate-200/60">
           <CloudOff className="h-10 w-10 text-slate-400" />

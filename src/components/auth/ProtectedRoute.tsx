@@ -15,7 +15,7 @@ export function PublicRoute({children}: {children: React.ReactNode}) {
   const token = localStorage.getItem("access_token")
 
   if (token) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/chat" replace />
   }
 
   return <>{children}</>;
