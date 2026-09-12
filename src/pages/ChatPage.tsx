@@ -732,7 +732,7 @@ function ChatSideBar({
                 <DropdownMenuItem
                   onClick={() => {
                     localStorage.clear();
-                    navigate("/login-v2");
+                    navigate("/login");
                   }}
                   className="mt-2 mb-2 cursor-pointer gap-3 text-red-600 focus:text-red-600 focus:bg-red-50"
                 >
