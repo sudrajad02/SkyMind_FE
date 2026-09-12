@@ -1,17 +1,18 @@
-import { Check, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import React, { useState } from "react";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import googleIcon from "@/assets/icon_google.svg";
-import windowsIcon from "@/assets/icon_windows.svg";
-import appleIcon from "@/assets/icon_apple.svg";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
-export function LoginForm() {
+export function LoginForm({
+  onSwitchToRegister,
+}: {
+  onSwitchToRegister?: () => void;
+}) {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
 
   const [form, setForm] = useState({
     email: "",
@@ -82,23 +83,17 @@ export function LoginForm() {
   const handleGoogleLogin = () => {
     console.log("Google login");
   };
-  const handleWindowsLogin = () => {
-    console.log("Windows login");
-  };
-  const handleAppleLogin = () => {
-    console.log("Apple login");
-  };
 
   return (
     <div className="w-full">
       {/* Heading */}
-      <div className="mb-8">
+      <div className="mb-4">
         <h2 className="text-3xl font-bold tracking-tight text-slate-950">
-          Welcome Back
+          Log in
         </h2>
 
         <p className="mt-2 text-sm text-slate-500">
-          Log in to your ChatBotApp account
+          Continue your conversations and pick up right where you left off.
         </p>
       </div>
 
@@ -150,20 +145,8 @@ export function LoginForm() {
           </button>
         </div>
 
-        {/* Remember Me */}
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setRememberMe(!rememberMe)}
-            className="flex items-center gap-2 text-sm text-slate-600"
-          >
-            <span
-              className={`flex h-4 w-4 items-center justify-center rounded border ${rememberMe ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white"}`}
-            >
-              {rememberMe && <Check className="h-3 w-3" />}
-            </span>
-            Remember me
-          </button>
+        {/* Forgot Password */}
+        <div className="flex justify-end">
           <button
             type="button"
             className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
@@ -194,16 +177,6 @@ export function LoginForm() {
           <img src={googleIcon} alt="Google" className="h-5 w-5" />
           Continue with Google
         </SocialButton>
-
-        <SocialButton onClick={handleWindowsLogin}>
-          <img src={windowsIcon} alt="Windows" className="h-5 w-5" />
-          Continue with Microsoft
-        </SocialButton>
-
-        <SocialButton onClick={handleAppleLogin}>
-          <img src={appleIcon} alt="Apple" className="h-5 w-5" />
-          Continue with Apple
-        </SocialButton>
       </div>
 
       {/* Register */}
@@ -211,6 +184,7 @@ export function LoginForm() {
         Don't have an account?{" "}
         <button
           type="button"
+          onClick={onSwitchToRegister}
           className="font-medium text-emerald-600 hover:text-emerald-700"
         >
           Sign up
