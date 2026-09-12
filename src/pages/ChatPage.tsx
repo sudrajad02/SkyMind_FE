@@ -234,13 +234,70 @@ export function ChatPage() {
     inputRef.current?.focus();
   };
 
-  const handleRegenerate = () => {
+  const handleRegenerate = async () => {
+    if (isTyping && isThinking) return;
+
     const lastUserMessage = [...messages]
       .reverse()
       .find((m) => m.role === "user");
-    if (lastUserMessage) {
-      setMessages((prev) => prev.slice(0, -1));
-      handleSendMessage(lastUserMessage.content);
+
+    if (lastUserMessage) return;
+
+    const messagesWithoutLastAi = messages.filter(
+      (_, idx) => idx !== messages.length - 1,
+    );
+
+    setMessages(messagesWithoutLastAi);
+    setIsTyping(true);
+    setIsThinking(true);
+
+    const token = localStorage.getItem("access_token");
+    const apiUrl = import.meta.env.VITE_BE_URL;
+    try {
+      // 3. Request ulang ke backend
+      const response = await axios.post(
+        `${apiUrl}/chat`,
+        {
+          session_id: activeChatId,
+          content: lastUserMessage.content,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+      const resData = response.data?.data || response.data;
+      const aiReply = resData?.content || "Maaf, tidak ada respon dari server.";
+      const weatherData = resData?.weather_json;
+      // 4. Siapkan balasan baru
+      const botId = Date.now() + 1;
+      const botMessage: Message = {
+        id: botId,
+        role: "ai",
+        content: "",
+        weather_json: weatherData,
+      };
+      setMessages([...messagesWithoutLastAi, botMessage]);
+      setIsThinking(false);
+      // 5. Efek mengetik
+      const words = aiReply.split(" ");
+      let accumulatedText = "";
+      for (let i = 0; i < words.length; i++) {
+        accumulatedText += (i === 0 ? "" : " ") + words[i];
+        const currentText = accumulatedText;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === botId ? { ...m, content: currentText } : m,
+          ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      }
+    } catch (error) {
+      console.error("Gagal regenerate pesan:", error);
+    } finally {
+      setIsTyping(false);
+      setIsThinking(false);
     }
   };
 
