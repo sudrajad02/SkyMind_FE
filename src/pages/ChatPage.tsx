@@ -23,6 +23,7 @@ import {
   Ellipsis,
   Library,
   LogOut,
+  Menu,
   Pin,
   Plus,
   RotateCcw,
@@ -33,6 +34,7 @@ import {
   ThumbsDown,
   ThumbsUp,
   Trash,
+  X,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -51,6 +53,8 @@ import { WeatherCard } from "@/components/chat/WeatherCard";
 
 export function ChatPage() {
   const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   // 1. Simpan pesan
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(true);
@@ -235,13 +239,13 @@ export function ChatPage() {
   };
 
   const handleRegenerate = async () => {
-    if (isTyping && isThinking) return;
+    if (isTyping || isThinking) return;
 
     const lastUserMessage = [...messages]
       .reverse()
       .find((m) => m.role === "user");
 
-    if (lastUserMessage) return;
+    if (!lastUserMessage) return;
 
     const messagesWithoutLastAi = messages.filter(
       (_, idx) => idx !== messages.length - 1,
@@ -393,19 +397,37 @@ export function ChatPage() {
       <ChatSideBar
         activeNav={activeNav}
         setActiveNav={setActiveNav}
-        onNewChat={handleNewChat}
+        onNewChat={() => {
+          handleNewChat();
+          setMobileOpen(false);
+        }}
         sessions={sessions}
         activeChatId={activeChatId}
-        onSelectChat={handleSelectChat}
+        onSelectChat={(id) => {
+          handleSelectChat(id);
+          setMobileOpen(false);
+        }}
         onDeleteChat={handleDeleteChat}
         loadingHistory={loadingHistory}
         user={userJson}
+        isOpen={mobileOpen}
+        onClose={() => setMobileOpen(false)}
       />
 
       {/* Main Chat */}
       <main className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
         <header className="flex h-16 shrink-0 items-center justify-end px-5">
+          <div className="flex items-center gap-2 md:hidden">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100"
+              title="Buka menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <span className="font-semibold text-slate-900">SkyMind</span>
+          </div>
           <div className="flex items-center gap-3">
             <div className="hidden items-center gap-2 rounded-full px-2 py-2 text-sm font-medium text-slate-600 sm:flex hover:bg-slate-100">
               <Sparkles className="h-3.5 w-3.5" />
@@ -636,6 +658,8 @@ interface ChatSideBarProps {
   onDeleteChat: (id: string, e: React.MouseEvent) => void;
   loadingHistory: boolean;
   user: any;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 function ChatSideBar({
@@ -648,6 +672,8 @@ function ChatSideBar({
   onDeleteChat,
   loadingHistory,
   user,
+  isOpen,
+  onClose,
 }: ChatSideBarProps) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
@@ -657,158 +683,178 @@ function ChatSideBar({
     s.title.toLocaleLowerCase().includes(searchQuery.toLowerCase()),
   );
   return (
-    <aside className="hidden w-[260px] shrink-0 flex-col border-r border-slate-200 bg-muted/30 md:flex">
-      {/* Logo */}
-      <div className="flex h-16 items-center gap-3 px-5">
-        <span className="text-xl font-semibold">SkyMind</span>
-      </div>
+    <>
+      {isOpen && (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs md:hidden"
+        />
+      )}
 
-      {/* Navigation */}
-      <div className="flex flex-col gap-1 px-3">
-        <button
-          onClick={() => {
-            setActiveNav("chat");
-            onNewChat();
-          }}
-          className={`flex h-8 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors ${activeNav === "chat" && activeChatId === null ? "bg-slate-200 font-medium text-slate-900" : "text-slate-600 hover:bg-slate-700/10"}`}
-        >
-          <Plus className="h-4 w-4" />
-          New Chat
-        </button>
-        {showSearchInput ? (
-          <div className="relative px-1">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              autoFocus
-              placeholder="Cari percakapan"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onBlur={() => !searchQuery && setShowSearchInput(false)}
-              className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-800 outline-none focus:border-slate-500"
-            />
-          </div>
-        ) : (
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-[270px] shrink-0 flex-col border-r border-slate-200 bg-white transition-transform duration-200 ease-in-out md:static md:w-[260px] md:translate-x-0 md:bg-muted/30 ${
+          isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+        }`}
+      >
+        {/* Logo */}
+        <div className="flex h-16 items-center justify-between px-5">
+          <span className="text-xl font-semibold">SkyMind</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 md:hidden"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex flex-col gap-1 px-3">
           <button
             onClick={() => {
-              setActiveNav("search");
-              setShowSearchInput(true);
+              setActiveNav("chat");
+              onNewChat();
             }}
-            className={`flex h-8 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors ${
-              activeNav === "search"
-                ? "bg-slate-200 font-medium text-slate-900"
-                : "text-slate-600 hover:bg-slate-700/10"
-            }`}
+            className={`flex h-8 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors ${activeNav === "chat" && activeChatId === null ? "bg-slate-200 font-medium text-slate-900" : "text-slate-600 hover:bg-slate-700/10"}`}
           >
-            <Search className="h-4 w-4" />
-            Search chats
+            <Plus className="h-4 w-4" />
+            New Chat
           </button>
-        )}
-      </div>
-
-      {/* Chat History */}
-      <div className="mt-24 flex-1 overflow-y-auto overflow-x-hidden px-3">
-        <HistorySection
-          title="Recents"
-          sessions={filteredSessions}
-          activeChatId={activeChatId}
-          onSelectChat={onSelectChat}
-          onDeleteChat={onDeleteChat}
-          loadingHistory={loadingHistory}
-          // chats={[
-          //   "Project planning ideas",
-          //   "Summarize this article",
-          //   "Marketing strategy",
-          //   "UI design feedback",
-          //   "Explain machine learning",
-          //   "Travel itinerary",
-          //   "Write email template",
-          //   "Healthy meal ideas",
-          //   "AI ethics discussion",
-          //   "Best budget smartphones 2024",
-          //   "How to start a podcast",
-          //   "Tips for remote work productivity",
-          //   "Understanding blockchain",
-          //   "Creating a workout plan",
-          //   "Interview preparation",
-          //   "History of the internet",
-          //   "Learning guitar basics",
-          // ]}
-        />
-      </div>
-
-      {/* User */}
-      <div className="border-t border-slate-200 p-3">
-        <div className="flex w-full items-center justify-between gap-2 rounded-lg p-1.5 hover:bg-slate-700/10">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-left focus:outline-none">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
-                {user?.full_name.split(" ").length == 1
-                  ? user?.full_name.split(" ")[0][0]
-                  : user?.full_name.split(" ")[0][0] +
-                    user?.full_name.split(" ")[1][0]}
-              </div>
-              <div className="min-w-0 flex-1 text-left">
-                <p className="truncate text-sm font-medium">
-                  {user?.full_name}
-                </p>
-                <p className="truncate text-xs text-slate-400">Free Plan</p>
-              </div>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              side="top"
-              align="start"
-              sideOffset={8}
-              className="w-56"
+          {showSearchInput ? (
+            <div className="relative px-1">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Cari percakapan"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onBlur={() => !searchQuery && setShowSearchInput(false)}
+                className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-800 outline-none focus:border-slate-500"
+              />
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setActiveNav("search");
+                setShowSearchInput(true);
+              }}
+              className={`flex h-8 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors ${
+                activeNav === "search"
+                  ? "bg-slate-200 font-medium text-slate-900"
+                  : "text-slate-600 hover:bg-slate-700/10"
+              }`}
             >
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="truncate mt-1 text-sm font-medium leading-none">
-                      {user?.full_name}
-                    </p>
-                    <p className="truncate mt-1 text-xs leading-none text-slate-500">
-                      {user?.email}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-              </DropdownMenuGroup>
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuGroup>
-                <DropdownMenuItem className="mt-2 cursor-pointer gap-3">
-                  <CircleUserRound className="h-4 w-4"></CircleUserRound>
-                  <span>Profile</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="mt-2 cursor-pointer gap-3">
-                  <Settings className="h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    localStorage.clear();
-                    navigate("/login");
-                  }}
-                  className="mt-2 mb-2 cursor-pointer gap-3 text-red-600 focus:text-red-600 focus:bg-red-50"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>Logout</span>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Button
-            variant="outline"
-            className="rounded-full border-slate-700/20 bg-white px-2 py-1 text-xs text-slate-700"
-          >
-            Upgrade
-          </Button>
+              <Search className="h-4 w-4" />
+              Search chats
+            </button>
+          )}
         </div>
-      </div>
-    </aside>
+
+        {/* Chat History */}
+        <div className="mt-24 flex-1 overflow-y-auto overflow-x-hidden px-3">
+          <HistorySection
+            title="Recents"
+            sessions={filteredSessions}
+            activeChatId={activeChatId}
+            onSelectChat={onSelectChat}
+            onDeleteChat={onDeleteChat}
+            loadingHistory={loadingHistory}
+            // chats={[
+            //   "Project planning ideas",
+            //   "Summarize this article",
+            //   "Marketing strategy",
+            //   "UI design feedback",
+            //   "Explain machine learning",
+            //   "Travel itinerary",
+            //   "Write email template",
+            //   "Healthy meal ideas",
+            //   "AI ethics discussion",
+            //   "Best budget smartphones 2024",
+            //   "How to start a podcast",
+            //   "Tips for remote work productivity",
+            //   "Understanding blockchain",
+            //   "Creating a workout plan",
+            //   "Interview preparation",
+            //   "History of the internet",
+            //   "Learning guitar basics",
+            // ]}
+          />
+        </div>
+
+        {/* User */}
+        <div className="border-t border-slate-200 p-3">
+          <div className="flex w-full items-center justify-between gap-2 rounded-lg p-1.5 hover:bg-slate-700/10">
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-left focus:outline-none">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
+                  {user?.full_name.split(" ").length == 1
+                    ? user?.full_name.split(" ")[0][0]
+                    : user?.full_name.split(" ")[0][0] +
+                      user?.full_name.split(" ")[1][0]}
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="truncate text-sm font-medium">
+                    {user?.full_name}
+                  </p>
+                  <p className="truncate text-xs text-slate-400">Free Plan</p>
+                </div>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                sideOffset={8}
+                className="w-56"
+              >
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="truncate mt-1 text-sm font-medium leading-none">
+                        {user?.full_name}
+                      </p>
+                      <p className="truncate mt-1 text-xs leading-none text-slate-500">
+                        {user?.email}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                </DropdownMenuGroup>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuGroup>
+                  <DropdownMenuItem className="mt-2 cursor-pointer gap-3">
+                    <CircleUserRound className="h-4 w-4"></CircleUserRound>
+                    <span>Profile</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="mt-2 cursor-pointer gap-3">
+                    <Settings className="h-4 w-4" />
+                    <span>Settings</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      localStorage.clear();
+                      navigate("/login");
+                    }}
+                    className="mt-2 mb-2 cursor-pointer gap-3 text-red-600 focus:text-red-600 focus:bg-red-50"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Logout</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button
+              variant="outline"
+              className="rounded-full border-slate-700/20 bg-white px-2 py-1 text-xs text-slate-700"
+            >
+              Upgrade
+            </Button>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }
 
