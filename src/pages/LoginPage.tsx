@@ -1,8 +1,11 @@
 import { LoginForm } from "@/components/auth/LoginForm";
-import { Layers, Sparkles, UsersRound, Zap } from "lucide-react";
+import { RegisterForm } from "@/components/auth/RegisterForm";
+import { CloudSunRain, User, Zap } from "lucide-react";
 import type React from "react";
+import { useState } from "react";
 
 export function LoginPage() {
+  const [isRegister, setIsRegister] = useState(false);
   return (
     <main className="min-h-screen bg-[#f4f7fa]">
       <div className="grid min-h-screen lg:grid-cols-[35%_65%]">
@@ -16,38 +19,34 @@ export function LoginPage() {
 
           <div className="relative z-10 flex w-full flex-col justify-center px-16 xl:px-24">
             <div className="mb-8">
-              <div className="mb-5 flex h-18 w-18 items-center justify-center rounded-2xl bg-white shadow-sm">
-                <Sparkles className="h-10 w-10" />
-              </div>
-
-              <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-                ChatBotApp
+              <h1 className="text-6xl font-bold tracking-tight text-slate-950">
+                SkyMind
               </h1>
 
               <p className="mt-4 max-w-sm text-base leading-6 text-slate-500">
-                Smarter conversations
+                Ask SkyMind anything
                 <br />
-                for a more productive you.
+                about the weather.
               </p>
             </div>
 
             <div className="mt-8 space-y-6">
               <Feature
                 icon={Zap}
-                title="Get instant answers"
-                description="on any topic"
+                title="Instant weather answers"
+                description="whenever you need them"
               />
 
               <Feature
-                icon={Layers}
-                title="Boost your productivity"
-                description="with AI"
+                icon={CloudSunRain}
+                title="Smarter weather insights"
+                description="understand more than just the forecast"
               />
 
               <Feature
-                icon={UsersRound}
-                title="A more helpful"
-                description="and personalized experience"
+                icon={User}
+                title="Personalized forecasts"
+                description="weather that's relevant to you"
               />
             </div>
           </div>
@@ -56,7 +55,11 @@ export function LoginPage() {
         {/* Right Side */}
         <section className="flex items-center justify-center bg-white px-6 py-12 lg:px-8">
           <div className="w-full max-w-md">
-            <LoginForm />
+            {isRegister ? (
+              <RegisterForm onSwitchToLogin={() => setIsRegister(false)} />
+            ) : (
+              <LoginForm onSwitchToRegister={() => setIsRegister(true)} />
+            )}
           </div>
         </section>
       </div>
@@ -66,15 +69,11 @@ export function LoginPage() {
 
 type FeatureProps = {
   icon: React.ComponentType<{ className?: string }>;
-  title: string
-  description: string
-}
+  title: string;
+  description: string;
+};
 
-function Feature({
-  icon: Icon,
-  title,
-  description,
-}: FeatureProps) {
+function Feature({ icon: Icon, title, description }: FeatureProps) {
   return (
     <div className="flex items-start gap-4">
       <div className="flex h-7 w-7 items-cente justify-center text-xl text-slate-900">
@@ -82,13 +81,9 @@ function Feature({
       </div>
 
       <div>
-        <p className="text-sm font-medium text-slate-700">
-          {title}
-        </p>
-        <p className="text-sm text-slate-500">
-          {description}
-        </p>
+        <p className="text-sm font-medium text-slate-700">{title}</p>
+        <p className="text-sm text-slate-500">{description}</p>
       </div>
     </div>
-  )
+  );
 }

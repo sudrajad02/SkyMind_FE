@@ -21,10 +21,9 @@ import {
   CircleUserRound,
   Copy,
   Ellipsis,
-  Folders,
-  Images,
   Library,
   LogOut,
+  Menu,
   Pin,
   Plus,
   RotateCcw,
@@ -35,6 +34,7 @@ import {
   ThumbsDown,
   ThumbsUp,
   Trash,
+  X,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -49,9 +49,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { WeatherCard } from "@/components/chat/WeatherCard";
 
 export function ChatPage() {
   const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   // 1. Simpan pesan
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(true);
@@ -165,6 +168,7 @@ export function ChatPage() {
       const resData = response.data?.data || response.data;
       const aiReply = resData?.content || "Maaf, tidak ada respon dari server.";
       const returnedSessionId = resData?.session_id;
+      const weatherData = resData?.weather_json;
 
       // handle session pertama atau lanjut
       if (!activeChatId && returnedSessionId) {
@@ -178,6 +182,7 @@ export function ChatPage() {
         id: botId,
         role: "ai",
         content: "",
+        weather_json: weatherData,
       };
 
       // simpan balasan ai di state
@@ -233,13 +238,70 @@ export function ChatPage() {
     inputRef.current?.focus();
   };
 
-  const handleRegenerate = () => {
+  const handleRegenerate = async () => {
+    if (isTyping || isThinking) return;
+
     const lastUserMessage = [...messages]
       .reverse()
       .find((m) => m.role === "user");
-    if (lastUserMessage) {
-      setMessages((prev) => prev.slice(0, -1));
-      handleSendMessage(lastUserMessage.content);
+
+    if (!lastUserMessage) return;
+
+    const messagesWithoutLastAi = messages.filter(
+      (_, idx) => idx !== messages.length - 1,
+    );
+
+    setMessages(messagesWithoutLastAi);
+    setIsTyping(true);
+    setIsThinking(true);
+
+    const token = localStorage.getItem("access_token");
+    const apiUrl = import.meta.env.VITE_BE_URL;
+    try {
+      // 3. Request ulang ke backend
+      const response = await axios.post(
+        `${apiUrl}/chat`,
+        {
+          session_id: activeChatId,
+          content: lastUserMessage.content,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+      const resData = response.data?.data || response.data;
+      const aiReply = resData?.content || "Maaf, tidak ada respon dari server.";
+      const weatherData = resData?.weather_json;
+      // 4. Siapkan balasan baru
+      const botId = Date.now() + 1;
+      const botMessage: Message = {
+        id: botId,
+        role: "ai",
+        content: "",
+        weather_json: weatherData,
+      };
+      setMessages([...messagesWithoutLastAi, botMessage]);
+      setIsThinking(false);
+      // 5. Efek mengetik
+      const words = aiReply.split(" ");
+      let accumulatedText = "";
+      for (let i = 0; i < words.length; i++) {
+        accumulatedText += (i === 0 ? "" : " ") + words[i];
+        const currentText = accumulatedText;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === botId ? { ...m, content: currentText } : m,
+          ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      }
+    } catch (error) {
+      console.error("Gagal regenerate pesan:", error);
+    } finally {
+      setIsTyping(false);
+      setIsThinking(false);
     }
   };
 
@@ -335,19 +397,37 @@ export function ChatPage() {
       <ChatSideBar
         activeNav={activeNav}
         setActiveNav={setActiveNav}
-        onNewChat={handleNewChat}
+        onNewChat={() => {
+          handleNewChat();
+          setMobileOpen(false);
+        }}
         sessions={sessions}
         activeChatId={activeChatId}
-        onSelectChat={handleSelectChat}
+        onSelectChat={(id) => {
+          handleSelectChat(id);
+          setMobileOpen(false);
+        }}
         onDeleteChat={handleDeleteChat}
         loadingHistory={loadingHistory}
         user={userJson}
+        isOpen={mobileOpen}
+        onClose={() => setMobileOpen(false)}
       />
 
       {/* Main Chat */}
       <main className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
         <header className="flex h-16 shrink-0 items-center justify-end px-5">
+          <div className="flex items-center gap-2 md:hidden">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100"
+              title="Buka menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <span className="font-semibold text-slate-900">SkyMind</span>
+          </div>
           <div className="flex items-center gap-3">
             <div className="hidden items-center gap-2 rounded-full px-2 py-2 text-sm font-medium text-slate-600 sm:flex hover:bg-slate-100">
               <Sparkles className="h-3.5 w-3.5" />
@@ -430,7 +510,12 @@ export function ChatPage() {
                         className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-6 ${msg.role === "user" ? "bg-blue-200 text-slate-600" : "bg-slate-100 text-slate-600"}`}
                       >
                         {msg.role === "ai" ? (
-                          <MarkdownRenderer content={msg.content} />
+                          <>
+                            <MarkdownRenderer content={msg.content} />
+                            {msg.weather_json && !isTyping && (
+                              <WeatherCard weatherData={msg.weather_json} />
+                            )}
+                          </>
                         ) : (
                           <p className="whitespace-pre-wrap">{msg.content}</p>
                         )}
@@ -573,6 +658,8 @@ interface ChatSideBarProps {
   onDeleteChat: (id: string, e: React.MouseEvent) => void;
   loadingHistory: boolean;
   user: any;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 function ChatSideBar({
@@ -585,166 +672,189 @@ function ChatSideBar({
   onDeleteChat,
   loadingHistory,
   user,
+  isOpen,
+  onClose,
 }: ChatSideBarProps) {
   const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearchInput, setShowSearchInput] = useState(false);
+
+  const filteredSessions = sessions.filter((s) =>
+    s.title.toLocaleLowerCase().includes(searchQuery.toLowerCase()),
+  );
   return (
-    <aside className="hidden w-[260px] shrink-0 flex-col border-r border-slate-200 bg-muted/30 md:flex">
-      {/* Logo */}
-      <div className="flex h-16 items-center gap-3 px-5">
-        <span className="text-xl font-semibold">SkyMind</span>
-      </div>
-
-      {/* Navigation */}
-      <div className="flex flex-col gap-1 px-3">
-        <button
-          onClick={() => {
-            setActiveNav("chat");
-            onNewChat();
-          }}
-          className={`flex h-8 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors ${activeNav === "chat" && activeChatId === null ? "bg-slate-200 font-medium text-slate-900" : "text-slate-600 hover:bg-slate-700/10"}`}
-        >
-          <Plus className="h-4 w-4" />
-          New Chat
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveNav("search");
-          }}
-          className={`flex h-8 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors ${activeNav === "search" ? "bg-slate-200 font-medium text-slate-900" : "text-slate-600 hover:bg-slate-700/10"}`}
-        >
-          <Search className="h-4 w-4" />
-          Search chats
-        </button>
-
-        <button
-          onClick={() => setActiveNav("images")}
-          className={`flex h-8 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors ${activeNav === "images" ? "bg-slate-200 font-medium text-slate-900" : "text-slate-600 hover:bg-slate-700/10"}`}
-        >
-          <Images className="h-4 w-4" />
-          Images
-        </button>
-
-        <button
-          onClick={() => setActiveNav("library")}
-          className={`flex h-8 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors ${activeNav === "library" ? "bg-slate-200 font-medium text-slate-900" : "text-slate-600 hover:bg-slate-700/10"}`}
-        >
-          <Library className="h-4 w-4" />
-          Library
-        </button>
-
-        <button
-          onClick={() => setActiveNav("projects")}
-          className={`flex h-8 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors ${activeNav === "projects" ? "bg-slate-200 font-medium text-slate-900" : "text-slate-600 hover:bg-slate-700/10"}`}
-        >
-          <Folders className="h-4 w-4" />
-          Projects
-        </button>
-      </div>
-
-      {/* Chat History */}
-      <div className="mt-4 flex-1 overflow-y-auto overflow-x-hidden px-3">
-        <HistorySection
-          title="Recents"
-          sessions={sessions}
-          activeChatId={activeChatId}
-          onSelectChat={onSelectChat}
-          onDeleteChat={onDeleteChat}
-          loadingHistory={loadingHistory}
-          // chats={[
-          //   "Project planning ideas",
-          //   "Summarize this article",
-          //   "Marketing strategy",
-          //   "UI design feedback",
-          //   "Explain machine learning",
-          //   "Travel itinerary",
-          //   "Write email template",
-          //   "Healthy meal ideas",
-          //   "AI ethics discussion",
-          //   "Best budget smartphones 2024",
-          //   "How to start a podcast",
-          //   "Tips for remote work productivity",
-          //   "Understanding blockchain",
-          //   "Creating a workout plan",
-          //   "Interview preparation",
-          //   "History of the internet",
-          //   "Learning guitar basics",
-          // ]}
+    <>
+      {isOpen && (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs md:hidden"
         />
-      </div>
+      )}
 
-      {/* User */}
-      <div className="border-t border-slate-200 p-3">
-        <div className="flex w-full items-center justify-between gap-2 rounded-lg p-1.5 hover:bg-slate-700/10">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-left focus:outline-none">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
-                {user?.full_name.split(" ").length == 1
-                  ? user?.full_name.split(" ")[0][0]
-                  : user?.full_name.split(" ")[0][0] +
-                    user?.full_name.split(" ")[1][0]}
-              </div>
-              <div className="min-w-0 flex-1 text-left">
-                <p className="truncate text-sm font-medium">
-                  {user?.full_name}
-                </p>
-                <p className="truncate text-xs text-slate-400">Free Plan</p>
-              </div>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              side="top"
-              align="start"
-              sideOffset={8}
-              className="w-56"
-            >
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="truncate mt-1 text-sm font-medium leading-none">
-                      {user?.full_name}
-                    </p>
-                    <p className="truncate mt-1 text-xs leading-none text-slate-500">
-                      {user?.email}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-              </DropdownMenuGroup>
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuGroup>
-                <DropdownMenuItem className="mt-2 cursor-pointer gap-3">
-                  <CircleUserRound className="h-4 w-4"></CircleUserRound>
-                  <span>Profile</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="mt-2 cursor-pointer gap-3">
-                  <Settings className="h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    localStorage.clear();
-                    navigate("/login-v2");
-                  }}
-                  className="mt-2 mb-2 cursor-pointer gap-3 text-red-600 focus:text-red-600 focus:bg-red-50"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>Logout</span>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Button
-            variant="outline"
-            className="rounded-full border-slate-700/20 bg-white px-2 py-1 text-xs text-slate-700"
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-[270px] shrink-0 flex-col border-r border-slate-200 bg-white transition-transform duration-200 ease-in-out md:static md:w-[260px] md:translate-x-0 md:bg-muted/30 ${
+          isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+        }`}
+      >
+        {/* Logo */}
+        <div className="flex h-16 items-center justify-between px-5">
+          <span className="text-xl font-semibold">SkyMind</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 md:hidden"
           >
-            Upgrade
-          </Button>
+            <X className="h-4 w-4" />
+          </button>
         </div>
-      </div>
-    </aside>
+
+        {/* Navigation */}
+        <div className="flex flex-col gap-1 px-3">
+          <button
+            onClick={() => {
+              setActiveNav("chat");
+              onNewChat();
+            }}
+            className={`flex h-8 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors ${activeNav === "chat" && activeChatId === null ? "bg-slate-200 font-medium text-slate-900" : "text-slate-600 hover:bg-slate-700/10"}`}
+          >
+            <Plus className="h-4 w-4" />
+            New Chat
+          </button>
+          {showSearchInput ? (
+            <div className="relative px-1">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Cari percakapan"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onBlur={() => !searchQuery && setShowSearchInput(false)}
+                className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-xs text-slate-800 outline-none focus:border-slate-500"
+              />
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setActiveNav("search");
+                setShowSearchInput(true);
+              }}
+              className={`flex h-8 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors ${
+                activeNav === "search"
+                  ? "bg-slate-200 font-medium text-slate-900"
+                  : "text-slate-600 hover:bg-slate-700/10"
+              }`}
+            >
+              <Search className="h-4 w-4" />
+              Search chats
+            </button>
+          )}
+        </div>
+
+        {/* Chat History */}
+        <div className="mt-24 flex-1 overflow-y-auto overflow-x-hidden px-3">
+          <HistorySection
+            title="Recents"
+            sessions={filteredSessions}
+            activeChatId={activeChatId}
+            onSelectChat={onSelectChat}
+            onDeleteChat={onDeleteChat}
+            loadingHistory={loadingHistory}
+            // chats={[
+            //   "Project planning ideas",
+            //   "Summarize this article",
+            //   "Marketing strategy",
+            //   "UI design feedback",
+            //   "Explain machine learning",
+            //   "Travel itinerary",
+            //   "Write email template",
+            //   "Healthy meal ideas",
+            //   "AI ethics discussion",
+            //   "Best budget smartphones 2024",
+            //   "How to start a podcast",
+            //   "Tips for remote work productivity",
+            //   "Understanding blockchain",
+            //   "Creating a workout plan",
+            //   "Interview preparation",
+            //   "History of the internet",
+            //   "Learning guitar basics",
+            // ]}
+          />
+        </div>
+
+        {/* User */}
+        <div className="border-t border-slate-200 p-3">
+          <div className="flex w-full items-center justify-between gap-2 rounded-lg p-1.5 hover:bg-slate-700/10">
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-2 text-left focus:outline-none">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
+                  {user?.full_name.split(" ").length == 1
+                    ? user?.full_name.split(" ")[0][0]
+                    : user?.full_name.split(" ")[0][0] +
+                      user?.full_name.split(" ")[1][0]}
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="truncate text-sm font-medium">
+                    {user?.full_name}
+                  </p>
+                  <p className="truncate text-xs text-slate-400">Free Plan</p>
+                </div>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                sideOffset={8}
+                className="w-56"
+              >
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="truncate mt-1 text-sm font-medium leading-none">
+                        {user?.full_name}
+                      </p>
+                      <p className="truncate mt-1 text-xs leading-none text-slate-500">
+                        {user?.email}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                </DropdownMenuGroup>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuGroup>
+                  <DropdownMenuItem className="mt-2 cursor-pointer gap-3">
+                    <CircleUserRound className="h-4 w-4"></CircleUserRound>
+                    <span>Profile</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="mt-2 cursor-pointer gap-3">
+                    <Settings className="h-4 w-4" />
+                    <span>Settings</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      localStorage.clear();
+                      navigate("/login");
+                    }}
+                    className="mt-2 mb-2 cursor-pointer gap-3 text-red-600 focus:text-red-600 focus:bg-red-50"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Logout</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button
+              variant="outline"
+              className="rounded-full border-slate-700/20 bg-white px-2 py-1 text-xs text-slate-700"
+            >
+              Upgrade
+            </Button>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -917,13 +1027,11 @@ type SuggestionListProps = {
 
 function SuggestionList({ onSelect }: SuggestionListProps) {
   const suggestions = [
-    "Summarize a document",
-    "Help me write",
-    "Explain a concept",
-    "Brainstorm ideas",
-    "Create an image",
-    "Analyze data",
-    "More",
+    "Bagaimana cuaca Jakarta hari ini?",
+    "Prakiraan cuaca Bandung besok",
+    "Apakah Surabaya berpotensi hujan?",
+    "Kondisi angin dan suhu di Bali",
+    "Tips pakaian untuk cuaca lembap",
   ];
 
   return (
@@ -943,17 +1051,11 @@ function SuggestionList({ onSelect }: SuggestionListProps) {
 
 type MessageRole = "user" | "ai";
 
-interface MessageSection {
-  title: string; // Contoh: "1. Planning"
-  items: string[]; // Contoh: ["Define goals", "Research competitors"]
-}
-
 interface Message {
   id: number; // ID unik pesan (biasanya timestamp angka)
   role: MessageRole; // Siapa pengirimnya ("user" atau "ai")
   content: string; // Teks isi pesan utama
-  list?: MessageSection[]; // (Opsional) Jika balasan AI memiliki daftar poin terstruktur
-  footer?: string; // (Opsional) Kalimat penutup balasan AI
+  weather_json?: any;
 }
 
 interface ChatSession {
